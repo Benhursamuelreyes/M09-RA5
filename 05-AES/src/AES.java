@@ -1,6 +1,7 @@
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.Arrays;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
@@ -14,7 +15,14 @@ public class AES {
     private static byte[] iv = new byte[MIDA_IV];
     private static final String CLAU = "LaClauSecretaQueVulguis";
 
+    public static byte[] generaIv() {
+        SecureRandom sr = new SecureRandom();
+        sr.nextBytes(iv);
+        return iv;
+    }
+
     public static byte[] xifraAES(String msg, String password) throws Exception {
+        generaIv();
         byte[] bMsg = msg.getBytes(StandardCharsets.UTF_8);
         IvParameterSpec ivSpec = new IvParameterSpec(iv);
         MessageDigest md = MessageDigest.getInstance(ALGORISME_HASH);
