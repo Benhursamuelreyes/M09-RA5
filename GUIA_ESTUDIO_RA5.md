@@ -350,3 +350,143 @@ Laia quiere enviar un mensaje confidencial a Marc:
 > **Error frecuente:** pensar que Laia cifra con *su propia* clave pública o con *su* privada. Si Laia cifrara con su propia clave pública, solo **ella** podría descifrarlo: Marc no podría leerlo.
 
 > **Información adicional:** usar las claves en sentido contrario (cifrar con la *privada* del emisor) sirve para la **firma digital**. Cualquiera puede verificarla con la clave pública del emisor, y eso aporta **autenticación y no repudio** (las garantías del apartado 1.3). En la práctica (HTTPS, VPN), el asimétrico se usa para **acordar una clave simétrica** de forma segura y después se cifran los datos con AES, que es mucho más rápido.
+---
+
+# BLOQUE 5 — Función hash (cifrado unidireccional)
+
+Las dos familias anteriores son **reversibles**: lo que se cifra se puede descifrar. La función hash es la tercera familia del mapa y rompe esa regla: **va solo en una dirección**.
+
+## 5.1 Qué hace
+
+Una función hash toma unos datos de cualquier tamaño (un texto, un archivo, una contraseña) y los transforma en una cadena llamada **hash** o **resumen**. La característica que lo cambia todo:
+
+```
+  texto plano ──► [FUNCIÓN HASH] ──► hash
+       │                             #b!c1d&"(#df#!sk84
+       └───────────◄ ✗ ─────────────┘
+          No se conoce forma de volver atrás
+```
+
+No hay "clave de descifrado" porque **no existe la operación inversa**. Del hash no se puede reconstruir el dato original.
+
+## 5.2 Las propiedades que lo definen
+
+| Propiedad | Qué significa |
+|---|---|
+| **Unidireccional** | Es imposible deshacer el cifrado y recuperar el dato original |
+| **Determinista** | El mismo dato de entrada produce **siempre** el mismo hash |
+| **Tamaño fijo** | En la mayoría de algoritmos, el hash siempre mide lo mismo, entre más larga o corta que sea la entrada |
+| **Bajas colisiones** | Es muy difícil encontrar dos datos distintos que den el mismo hash (o uno parecido) |
+| **Efecto avalancha** | Un cambio mínimo en los datos de entrada produce un cambio **enorme** en el hash |
+
+**Ejemplo nuevo del efecto avalancha** (SHA-256, verificado). Fíjate en que cambiar una sola letra o añadir un punto da un hash completamente distinto, no parecido:
+
+```
+hola   →  b221d9dbb083a7f33428d7c2a3c3198ae925614d70210e28716ccaa7cd4ddb79
+Hola   →  e633f4fc79badea1dc5db970cf397c8248bac47cc3acf9915ba60b5d76b0e88f
+hola.  →  3b952738efe124f6b34181cb9e608432741ab05df195462dc98b26f50f9ef217
+```
+
+Ejemplos de algoritmos del documento: **SHA2**, **SHA3** y **KDF**.
+
+## 5.3 Para qué sirve si no se puede descifrar
+
+Justo porque es determinista pero irreversible, el hash es ideal para **guardar contraseñas**. En lugar de almacenar tu contraseña, el sistema guarda su hash:
+
+1. Cuando te registras, el sistema calcula el hash de tu contraseña y guarda **solo el hash**.
+2. Cuando inicias sesión, calcula el hash de lo que escribes y lo **compara** con el guardado.
+3. Si coinciden, eres tú. Y si alguien roba la base de datos, se lleva hashes, no contraseñas.
+
+Esta es la pieza que conecta con el último bloque: **auditar contraseñas es, en la práctica, atacar hashes**.
+
+> **Información adicional — sal (salt):** si dos usuarios tienen la misma contraseña, al ser el hash determinista obtienen el **mismo hash**, y eso se nota. Para evitarlo se añade a cada contraseña un valor aleatorio llamado **sal** antes de calcular el hash. Un hash **sin sal** es más débil justamente por esto. KDF (función de derivación de clave) va un paso más allá: repite el hash **miles de veces** a propósito para que calcularlo sea lento y atacarlo salga caro.
+
+---
+
+# BLOQUE 6 — Auditoría de contraseñas
+
+## 6.1 La idea: ponerse en el lugar del atacante
+
+**Auditar** contraseñas significa intentar romperlas uno mismo, de forma controlada, para descubrir cuáles son débiles **antes de que lo haga un atacante real**. La fortaleza de una contraseña se mide por el **tiempo que tardan las herramientas de auditoría en romperla**.
+
+```
+   Muy débil   →  segundos a minutos   (ej. 5-7 caracteres)
+   Débil       →  horas a días         (ej. 8-10 caracteres)
+   Buena       →  meses a años         (ej. 11-13 caracteres)
+   Fuerte      →  siglos               (16+ caracteres)
+```
+
+La regla práctica: **cuantos más caracteres, exponencialmente más tiempo** para romperla.
+
+## 6.2 Herramientas del documento
+
+| Herramienta | Ámbito |
+|---|---|
+| **John The Ripper** | Universal |
+| **Specops** | Auditoría de Active Directory |
+| **RainbowCrack** | Windows |
+| **Cain and Abel** | Windows |
+| **Wfuzz** | Análisis web |
+| **THC Hydra** | Web |
+| **Ncrack** | Varios |
+
+## 6.3 John the Ripper en detalle
+
+Es la herramienta universal de la lista. Dos ideas clave:
+
+- Trabaja **sobre hashes**: no ataca la contraseña directamente, sino el hash que la representa.
+- Es capaz de **convertir casi cualquier cifrado a un formato compatible** y después atacarlo.
+
+**Los tres modos de ataque**, de más listo a más bruto:
+
+| Modo | Qué prueba |
+|---|---|
+| **Single** | Claves evidentes: el propio nombre de usuario, contraseña vacía, etc. |
+| **Wordlist** | Una **lista de palabras** (diccionario); trae una por defecto |
+| **Brute force** | Prueba **todas** las combinaciones posibles, de forma exhaustiva |
+
+**Sintaxis básica:**
+
+```
+john arxiuhash                             Ataque por defecto
+john --format=NT arxiuhash_win             Indicando el tipo de hash
+john --format=XX --session=nom arxiuhash   Guardando la sesión
+john --show --format=XX arxiuhash          Mostrar lo encontrado
+john --restore=nom                         Reanudar la sesión 'nom'
+```
+
+**Uso avanzado:** los scripts `*2john.py` / `*2john.pl` convierten un archivo (un ZIP, un 7z, un PDF…) al formato que John entiende; después se aplica la sintaxis básica.
+
+> **Información adicional — versiones:** la versión de código abierto es **John the Ripper Jumbo** (Windows desde Openwall, Linux desde GitHub). Existe también **John the Ripper Pro**, de pago, en la web de Openwall.
+
+## 6.4 Caso práctico: resultados de la Act09
+
+Esta es la síntesis de la actividad de auditoría realizada, atacando tres tipos de hash con John the Ripper. La diferencia de velocidad entre ellos es la lección principal del bloque:
+
+| Caso / fichero | Tipo de cifrado | Contraseñas/segundo (media) | Contraseña encontrada | Tiempo total |
+|---|---|---|---|---|
+| `10-secret.7z` | 7z (SHA-256 + AES-256, 524288 iter.) | ~142 p/s | `secret` | ~1 s (3,83 s con arranque) |
+| `10-dificil.7z` | 7z (SHA-256 + AES-256, 524288 iter.) | ~151 p/s | `dificil01` | ~19 s (22,39 s con arranque) |
+| `10-vbox.txt` (vboxuser) | NT (MD4, sin sal) | ~71,6 millones c/s | `changeme` | <1 s |
+
+**Lo que revela la tabla:** el 7z prueba solo ~150 contraseñas por segundo, mientras que el hash NT de Windows prueba **millones** por segundo. Misma herramienta, una diferencia de velocidad de medio millón de veces, y la causa está en el cifrado, no en la contraseña.
+
+## 6.5 Las conclusiones que hay que saber defender
+
+**¿Por qué el 7z es el cifrado más seguro de los probados?**
+Porque aplica **524.288 iteraciones** (key stretching) en cada intento. Esa lentitud deliberada deja la velocidad en ~150 p/s y hace que la fuerza bruta y el diccionario salgan carísimos en tiempo.
+
+**¿Cuál es el más débil?**
+El **LM de Windows** (basado en DES): parte la contraseña en bloques de 7 caracteres, la pasa a mayúsculas y **no usa ni sal ni iteraciones**. Muy cerca está el **NT (MD4)**: tampoco tiene sal ni iteraciones, por eso corría a millones de intentos por segundo. La falta de sal hace que contraseñas iguales den hashes idénticos (de ahí que varias cuentas vacías compartan el mismo hash `31D6CFE0…`).
+
+**¿Por qué se eligen contraseñas débiles en la práctica?**
+Porque con un cifrado lento como el del 7z, una contraseña larga y aleatoria tardaría **años** en caer: la práctica no terminaría nunca. Se eligen contraseñas débiles para que el ejercicio sea demostrable en segundos. La lección: **si la contraseña es larga y el cifrado es lento, el ataque es inviable**.
+
+**¿John the Ripper es solo para atacantes?**
+No: es sobre todo una herramienta de **administradores de sistemas**. Sirve para auditar la robustez de las contraseñas de la propia organización (detectar cuentas con claves débiles, vacías o por defecto, como el `changeme`) y forzar su cambio antes de que lo aproveche un atacante. **La herramienta es neutra**; lo que distingue el uso legítimo del malicioso es el permiso y la intención.
+
+---
+
+## En una frase
+
+Proteger información es elegir, según lo que quieras garantizar, entre **una clave compartida** (simétrico), **dos claves emparejadas** (asimétrico) o **ningún camino de vuelta** (hash); y auditar contraseñas no es más que **medir cuánto resiste un hash** antes de rendirse.
